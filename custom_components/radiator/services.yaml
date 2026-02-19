@@ -1,0 +1,14 @@
+recall_preset:
+  name: Recall preset
+  description: Recall a global preset number (1..1000). Integration maps it to page + slot.
+  fields:
+    preset:
+      name: Preset number
+      description: Global preset number (1..1000).
+      required: true
+      example: 237
+      selector:
+        number:
+          min: 1
+          max: 1000
+          mode: box

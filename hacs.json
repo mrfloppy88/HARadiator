@@ -1,0 +1,7 @@
+{
+  "name": "HARadiator",
+  "content_in_root": false,
+  "domains": ["radiator"],
+  "country": "NL",
+  "homeassistant": "2024.6.0"
+}
