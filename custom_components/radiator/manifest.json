@@ -1,7 +1,7 @@
 {
   "domain": "radiator",
   "name": "Radiator Laser Synthesizer",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "documentation": "https://github.com/mrfloppy88/HARadiator",
   "requirements": [],
   "codeowners": ["@mrfloppy88"],

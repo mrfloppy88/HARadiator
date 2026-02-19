@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
+
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .radiator_tcp import RadiatorClient
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -15,7 +19,12 @@ class RadiatorData:
 
 class RadiatorCoordinator(DataUpdateCoordinator[RadiatorData]):
     def __init__(self, hass: HomeAssistant, client: RadiatorClient) -> None:
-        super().__init__(hass, name="radiator", update_interval=None)
+        super().__init__(
+            hass,
+            _LOGGER,
+            name="radiator",
+            update_interval=None,
+        )
         self.client = client
         self.client.set_on_update(self.async_set_updated_data_from_client)
 

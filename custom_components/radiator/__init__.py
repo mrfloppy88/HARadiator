@@ -18,12 +18,14 @@ PLATFORMS = ["select", "button"]
 
 
 def _preset_to_page_slot(preset: int) -> tuple[int, int]:
+    """Convert global preset (1..1000) to (page, slot)."""
     page = ((preset - 1) // 10) + 1
     slot = ((preset - 1) % 10) + 1
     return page, slot
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Radiator from a config entry."""
     host = entry.data[CONF_HOST]
     port = entry.data.get(CONF_PORT, DEFAULT_PORT)
 
@@ -33,37 +35,44 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "client": client,
         "coordinator": coordinator,
-        "current_page": 1,
     }
 
+    # Start TCP client
     await client.start()
     coordinator.async_set_updated_data_from_client()
 
     async def _handle_recall_preset(call: ServiceCall) -> None:
+        """Handle service call to recall global preset."""
         preset = int(call.data["preset"])
+
         if preset < 1 or preset > 1000:
             raise ValueError("preset must be between 1 and 1000")
 
         target_page, slot = _preset_to_page_slot(preset)
 
-        data = hass.data[DOMAIN][entry.entry_id]
-        current_page = int(data.get("current_page", 1))
+        # --- Robust page selection ---
+        # Radiator latches at page 1 when stepping below it.
+        # So we rewind hard to guarantee page=1,
+        # then step forward to the desired page.
+        await client.step_encoder(CTRL_PRESET_PAGE_ENCODER, -200)
+        await client.step_encoder(CTRL_PRESET_PAGE_ENCODER, target_page - 1)
 
-        delta = target_page - current_page
-        if delta != 0:
-            await client.step_encoder(CTRL_PRESET_PAGE_ENCODER, delta)
-            data["current_page"] = target_page
-
+        # Press preset button (20..29)
         btn_no = BTN_PRESET_1 + (slot - 1)
         await client.press_button(btn_no)
 
     hass.services.async_register(DOMAIN, "recall_preset", _handle_recall_preset)
 
+    # Forward to platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
     data = hass.data[DOMAIN].pop(entry.entry_id)
+
     await data["client"].stop()
+
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
