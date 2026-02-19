@@ -33,18 +33,60 @@ def _preset_to_page_slot(preset: int) -> tuple[int, int]:
     return page, slot
 
 
+async def _step_encoder_chunked(
+    client: RadiatorClient,
+    encoder_no: int,
+    steps: int,
+    *,
+    chunk_size: int = 10,
+    delay_s: float = 0.03,
+) -> None:
+    """
+    Step an encoder in small chunks with a short delay.
+    This is more reliable than sending one huge step value.
+    """
+    if steps == 0:
+        return
+
+    direction = 1 if steps > 0 else -1
+    remaining = abs(steps)
+
+    while remaining > 0:
+        chunk = min(chunk_size, remaining) * direction
+        await client.step_encoder(encoder_no, chunk)
+        remaining -= abs(chunk)
+        await asyncio.sleep(delay_s)
+
+
 async def _recall_preset_robust(client: RadiatorClient, preset: int) -> None:
-    """Recall a global preset number using 'rewind to page 1 then forward'."""
+    """Recall a global preset number using 'rewind to page 1 then forward' with chunking."""
     if preset < PRESET_MIN or preset > PRESET_MAX:
         raise ValueError(f"preset must be between {PRESET_MIN} and {PRESET_MAX}")
 
     target_page, slot = _preset_to_page_slot(preset)
 
-    # Radiator latches at page 1 when stepping below it:
-    # rewind hard, then step forward to desired page.
-    await client.step_encoder(CTRL_PRESET_PAGE_ENCODER, -200)
-    await client.step_encoder(CTRL_PRESET_PAGE_ENCODER, target_page - 1)
+    _LOGGER.debug("Recall preset=%s => page=%s slot=%s", preset, target_page, slot)
 
+    # Rewind hard so we latch at page 1 (confirmed by you).
+    # Do it in chunks so Radiator has time to process.
+    await _step_encoder_chunked(client, CTRL_PRESET_PAGE_ENCODER, -200, chunk_size=10, delay_s=0.03)
+
+    # Small settle time before moving forward
+    await asyncio.sleep(0.05)
+
+    # Step forward to the desired page (page 1 => 0 steps forward)
+    await _step_encoder_chunked(
+        client,
+        CTRL_PRESET_PAGE_ENCODER,
+        target_page - 1,
+        chunk_size=10,
+        delay_s=0.03,
+    )
+
+    # Give Radiator a moment to apply the page change before button press
+    await asyncio.sleep(0.05)
+
+    # Press preset button (20..29 = preset 1..10)
     btn_no = BTN_PRESET_1 + (slot - 1)
     await client.press_button(btn_no)
 
@@ -56,11 +98,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     client = RadiatorClient(host=host, port=port)
     coordinator = RadiatorCoordinator(hass, client)
 
-    # Per-entry runtime state
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "client": client,
         "coordinator": coordinator,
-        # Slot preset values (1..1000). Default = 1..20
         "slots": {i: i for i in range(1, SLOT_COUNT + 1)},
         "interval": DEFAULT_INTERVAL_SECONDS,
         "autoplay_task": None,
@@ -81,7 +121,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _autoplay_loop(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Background loop that cycles through the 20 slots."""
     data = hass.data[DOMAIN][entry.entry_id]
     client: RadiatorClient = data["client"]
     stop_event: asyncio.Event = data["autoplay_stop"]
@@ -101,7 +140,6 @@ async def _autoplay_loop(hass: HomeAssistant, entry: ConfigEntry) -> None:
             if idx > SLOT_COUNT:
                 idx = 1
 
-            # Wait interval or stop early
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=interval)
             except asyncio.TimeoutError:
@@ -113,7 +151,6 @@ async def _autoplay_loop(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     data = hass.data[DOMAIN].pop(entry.entry_id)
 
-    # Stop autoplay if running
     stop_event: asyncio.Event = data["autoplay_stop"]
     stop_event.set()
 
