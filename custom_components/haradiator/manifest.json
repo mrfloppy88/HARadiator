@@ -1,0 +1,13 @@
+{
+  "domain": "haradiator",
+  "name": "HARadiator",
+  "codeowners": ["@mrfloppy88"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/mrfloppy88/HARadiator",
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/mrfloppy88/HARadiator/issues",
+  "requirements": ["python-osc==1.9.3"],
+  "version": "0.2.0-beta.1"
+}
