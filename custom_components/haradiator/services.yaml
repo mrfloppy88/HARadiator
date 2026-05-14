@@ -1,0 +1,16 @@
+send_message:
+  name: Send OSC message
+  description: Send a raw OSC message to Radiator. Useful while the official OSC firmware/software support is still being validated.
+  fields:
+    address:
+      name: OSC address
+      description: OSC address to send, for example /radiator/master/blackout.
+      required: true
+      selector:
+        text:
+    value:
+      name: Value
+      description: Value to send. Numbers, booleans, and strings are supported.
+      required: true
+      selector:
+        text:

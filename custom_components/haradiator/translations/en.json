@@ -1,0 +1,38 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up HARadiator OSC",
+        "description": "Configure the Radiator OSC host and ports. The Radiator OSC update is not released yet, so these defaults are intentionally easy to change later.",
+        "data": {
+          "name": "Name",
+          "host": "Radiator host/IP",
+          "send_port": "Radiator OSC receive port",
+          "listen_host": "Home Assistant listen address",
+          "listen_port": "Home Assistant OSC listen port",
+          "preset_count": "Number of preset buttons",
+          "expose_advanced": "Enable advanced entities by default"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This Radiator host and port is already configured."
+    }
+  },
+  "services": {
+    "send_message": {
+      "name": "Send OSC message",
+      "description": "Send a raw OSC message to Radiator.",
+      "fields": {
+        "address": {
+          "name": "OSC address",
+          "description": "OSC address to send, for example /radiator/master/blackout."
+        },
+        "value": {
+          "name": "Value",
+          "description": "Value to send. Numbers, booleans, and strings are supported."
+        }
+      }
+    }
+  }
+}
