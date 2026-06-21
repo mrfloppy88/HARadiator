@@ -18,7 +18,7 @@ DEFAULT_LISTEN_PORT: Final = 9000
 DEFAULT_PRESET_COUNT: Final = 1000
 DEFAULT_EXPOSE_ADVANCED: Final = False
 
-PLATFORMS: Final = ["select", "sensor", "switch"]
+PLATFORMS: Final = ["select", "sensor", "switch", "number"]
 
 ATTR_ADDRESS: Final = "address"
 ATTR_VALUE: Final = "value"

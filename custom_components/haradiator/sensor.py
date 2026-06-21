@@ -19,14 +19,25 @@ from .const import (
 from .hub import RadiatorOscHub
 
 
-def _read_descriptions() -> tuple[RadiatorOscDescription, ...]:
-    """Return all OSC descriptions that can provide read-side feedback.
+ENABLED_BY_DEFAULT_ADDRESSES: set[str] = {
+    "/radiator/preset/current",
+    "/radiator/master/blackout",
+    "/radiator/master/level",
+    "/radiator/master/size",
+    "/radiator/color/mode/name",
+    "/radiator/ed/status",
+    "/radiator/shapeA/shape/name",
+    "/radiator/shapeB/shape/name",
+    "/radiator/lfo1/on",
+    "/radiator/lfo2/on",
+    "/radiator/lfo3/on",
+}
 
-    NUMBER_DESCRIPTIONS and SWITCH_DESCRIPTIONS contain RX+TX addresses, so they
-    are useful as read sensors too. SENSOR_DESCRIPTIONS contains TX-only string
-    and status feedback addresses.
-    """
+
+def _read_descriptions() -> tuple[RadiatorOscDescription, ...]:
+    """Return all OSC descriptions that can provide read-side feedback."""
     descriptions: list[RadiatorOscDescription] = []
+    seen_addresses: set[str] = set()
 
     for description in (
         *SENSOR_DESCRIPTIONS,
@@ -36,6 +47,10 @@ def _read_descriptions() -> tuple[RadiatorOscDescription, ...]:
         if "TX" not in description.direction:
             continue
 
+        if description.address in seen_addresses:
+            continue
+
+        seen_addresses.add(description.address)
         descriptions.append(description)
 
     return tuple(descriptions)
@@ -65,7 +80,6 @@ class RadiatorOscReadSensor(SensorEntity):
     """Read-only OSC feedback sensor for Radiator."""
 
     _attr_has_entity_name = True
-    _attr_entity_registry_enabled_default = True
 
     def __init__(
         self,
@@ -78,13 +92,17 @@ class RadiatorOscReadSensor(SensorEntity):
         self._entry = entry
         self._hub = hub
         self._description = description
+
         self.entity_description = SensorEntityDescription(
-            key=f"read_{description.key}",
-            name=f"Read {description.name}",
+            key=description.key,
+            name=description.name,
             icon=_icon_for_description(description),
         )
 
-        self._attr_unique_id = f"{entry.entry_id}_read_{description.key}"
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self._attr_entity_registry_enabled_default = (
+            description.address in ENABLED_BY_DEFAULT_ADDRESSES
+        )
         self._attr_native_value: Any = None
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -93,25 +111,29 @@ class RadiatorOscReadSensor(SensorEntity):
             model="Radiator",
             sw_version="OSC beta",
         )
-        self._attr_extra_state_attributes = {
+
+        extra_attributes: dict[str, Any] = {
             "osc_address": description.address,
             "osc_direction": description.direction,
             "osc_value_type": description.value_type,
-            "osc_section": description.section,
         }
 
+        if description.section:
+            extra_attributes["osc_section"] = description.section
+
         if description.notes:
-            self._attr_extra_state_attributes["osc_notes"] = description.notes
+            extra_attributes["osc_notes"] = description.notes
 
         if description.native_min_value is not None:
-            self._attr_extra_state_attributes["osc_min"] = description.native_min_value
+            extra_attributes["osc_min"] = description.native_min_value
 
         if description.native_max_value is not None:
-            self._attr_extra_state_attributes["osc_max"] = description.native_max_value
+            extra_attributes["osc_max"] = description.native_max_value
 
         if description.native_step is not None:
-            self._attr_extra_state_attributes["osc_step"] = description.native_step
+            extra_attributes["osc_step"] = description.native_step
 
+        self._attr_extra_state_attributes = extra_attributes
         self._unsubscribe = None
 
     async def async_added_to_hass(self) -> None:
@@ -176,8 +198,8 @@ class RadiatorOscReadSensor(SensorEntity):
 
 def _icon_for_description(description: RadiatorOscDescription) -> str:
     """Return a useful icon for an OSC feedback sensor."""
-    address = description.address
-    key = description.key
+    address = description.address.lower()
+    key = description.key.lower()
 
     if "preset" in address:
         return "mdi:playlist-check"
@@ -185,13 +207,16 @@ def _icon_for_description(description: RadiatorOscDescription) -> str:
     if "blackout" in address:
         return "mdi:power"
 
+    if "ed/status" in address:
+        return "mdi:lan-connect"
+
     if "color" in address or "hue" in address or "rgb" in address:
         return "mdi:palette"
 
     if "lfo" in address:
         return "mdi:sine-wave"
 
-    if "shape" in address:
+    if "shapea" in address or "shapeb" in address or "shape" in address:
         return "mdi:shape-outline"
 
     if "trans" in address:
@@ -203,7 +228,7 @@ def _icon_for_description(description: RadiatorOscDescription) -> str:
     if "master" in address:
         return "mdi:tune"
 
-    if key.endswith("_name"):
+    if key.endswith("_name") or address.endswith("/name"):
         return "mdi:label-outline"
 
     if description.value_type == "bool":
