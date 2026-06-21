@@ -1,115 +1,344 @@
-# HARadiator OSC
+# HARadiator
 
-Home Assistant custom integration for controlling Neon Captain Radiator over OSC.
+HARadiator is a Home Assistant custom integration for controlling **Neon Captain Radiator** over OSC.
 
-This is a prepared **OSC-first beta** for the upcoming Radiator update that adds OSC support. Because the Radiator OSC update is not public yet, expect that some addresses, ranges, or ports may need small changes once the final OSC reference is published.
+The integration is mainly built for show-control workflows where Home Assistant needs to trigger Radiator presets, control blackout, and receive status feedback from Radiator. It is still in beta, but basic OSC sending and receiving is working.
 
-## What this version does
+At the moment the integration keeps the control side intentionally simple. It creates a preset selector, a global blackout switch, a manual OSC service, and read-only sensors for OSC feedback coming back from Radiator.
 
-- Adds a Home Assistant config flow.
-- Sends OSC messages to Radiator over UDP.
-- Listens for OSC state feedback from Radiator over UDP.
-- Creates preset buttons.
-- Creates safe default entities for blackout, color, LFO, and Shape A/B controls.
-- Includes the full OSC reference as disabled-by-default advanced entities when `Expose advanced entities` is enabled during setup.
-- Adds a `haradiator.send_message` service so you can manually test new or changed OSC addresses before adding dedicated entities.
+## Current state
 
-## Install
+HARadiator currently provides a preset dropdown through `select.radiator_preset`, a global blackout switch through `switch.radiator_blackout`, and read-only feedback sensors using the `sensor.radiator_read_*` naming pattern.
 
-Copy this folder:
+There is also a manual service called `haradiator.send_message`. This service is useful for testing OSC addresses directly from Home Assistant’s Developer Tools.
 
-```text
-custom_components/haradiator
-```
+The read sensors are passive. They only update when Radiator sends OSC feedback. Radiator usually sends a large burst of feedback when changing presets, so switching presets is a good way to populate the sensors after startup.
 
-into your Home Assistant config folder:
+## Requirements
 
-```text
-/config/custom_components/haradiator
-```
+You need Home Assistant, HACS, and a Radiator version with OSC support enabled. Home Assistant and the Radiator machine need to be able to reach each other on the network, and UDP traffic must be allowed between them.
 
-Then restart Home Assistant.
+The default setup assumes Radiator receives OSC on port `8000` and sends OSC feedback to Home Assistant on port `9000`.
 
-After restart, go to:
+## Installing with HACS
+
+Add this repository to HACS as a custom integration repository:
 
 ```text
-Settings > Devices & services > Add integration > HARadiator
+https://github.com/mrfloppy88/HARadiator
 ```
 
-## Default ports
+Use `Integration` as the category.
 
-The defaults are placeholders based on the early OSC reference/screenshot:
+After adding the repository, install HARadiator from HACS and restart Home Assistant. Once Home Assistant has restarted, add the integration from **Settings > Devices & services**.
+
+## Radiator OSC settings
+
+In Radiator, enable OSC RX and OSC TX.
+
+The recommended Radiator settings are:
+
+| Radiator setting | Value                  |
+| ---------------- | ---------------------- |
+| OSC RX           | On                     |
+| OSC Port         | `8000`                 |
+| OSC TX           | On                     |
+| OSC TX IP        | Your Home Assistant IP |
+| OSC TX Port      | `9000`                 |
+
+The important thing to remember is that Radiator’s RX port is where Radiator receives commands. HARadiator sends to this port.
+
+Radiator’s TX settings are used for feedback. The TX IP must be the IP address of your Home Assistant machine, otherwise the feedback sensors in Home Assistant will not update.
+
+A typical setup looks like this:
 
 ```text
-Radiator OSC receive port: 9000
-Home Assistant OSC listen address: 0.0.0.0
-Home Assistant OSC listen port: 9000
+Radiator IP:       192.168.1.152
+Home Assistant IP: 192.168.1.100
+Radiator OSC RX:   8000
+Radiator OSC TX:   9000
 ```
 
-If Radiator and Home Assistant run on the same machine, they cannot both bind the same UDP receive port. In that case, change one side so Radiator sends feedback to the Home Assistant listen port and Home Assistant sends commands to the Radiator receive port.
+## HARadiator settings
 
-## Safe defaults
+When adding HARadiator in Home Assistant, use the Radiator machine IP as the host.
 
-By default, this integration enables only the safer/common entities:
+| HARadiator setting | Value               |
+| ------------------ | ------------------- |
+| Host               | Radiator machine IP |
+| Send port          | `8000`              |
+| Listen host        | `0.0.0.0`           |
+| Listen port        | `9000`              |
 
-- Preset buttons
-- Master blackout
-- HSV color values
-- LFO speed/level/on/warp for LFO 1-3
-- Shape A/B on, size, speed, and warp
+For example:
 
-Advanced entities are generated from the OSC spreadsheet but are disabled by default unless you enable `Expose advanced entities` during setup. Geometry correction, corner mesh, scale/offset, bias, and other setup/calibration controls should be treated carefully.
+| HARadiator setting | Example         |
+| ------------------ | --------------- |
+| Host               | `192.168.1.152` |
+| Send port          | `8000`          |
+| Listen host        | `0.0.0.0`       |
+| Listen port        | `9000`          |
 
-## Raw OSC testing service
+In short, Home Assistant sends commands to Radiator on port `8000`, and Radiator sends feedback back to Home Assistant on port `9000`.
 
-Use Developer Tools > Services:
+## Changing settings later
+
+HARadiator supports Home Assistant’s configure/options flow. This means you do not need to remove and re-add the integration just to change the host or port settings.
+
+Open **Settings > Devices & services**, select **HARadiator**, and choose **Configure**. After saving changes, Home Assistant should reload the integration with the new settings.
+
+## Preset control
+
+The main control entity is:
+
+```text
+select.radiator_preset
+```
+
+This selector is intended to support up to 1000 Radiator presets.
+
+Example automation action:
 
 ```yaml
-service: haradiator.send_message
+action: select.select_option
+target:
+  entity_id: select.radiator_preset
+data:
+  option: "Preset 1"
+```
+
+This can be used to build preset playlists, time-based changes, scene triggers, or show-control automations.
+
+## Blackout control
+
+The global blackout entity is:
+
+```text
+switch.radiator_blackout
+```
+
+To turn blackout on:
+
+```yaml
+action: switch.turn_on
+target:
+  entity_id: switch.radiator_blackout
+```
+
+To turn blackout off:
+
+```yaml
+action: switch.turn_off
+target:
+  entity_id: switch.radiator_blackout
+```
+
+Blackout control from Home Assistant is useful, but it should not replace proper physical laser safety controls.
+
+## Read-only feedback sensors
+
+HARadiator can expose Radiator OSC feedback as Home Assistant sensors. These usually appear as:
+
+```text
+sensor.radiator_read_*
+```
+
+These sensors can include preset state, master values, color values, LFO values, shape values, transform values, clone values, and other Radiator feedback addresses.
+
+The sensors only update when Radiator sends OSC data. If the sensors stay unknown after startup, change a preset or parameter in Radiator. That usually causes Radiator to send a larger feedback update.
+
+You can disable sensors you do not need from Home Assistant’s entity settings. Search for `radiator_read` in **Settings > Devices & services > Entities**.
+
+## Manual OSC service
+
+HARadiator includes a manual OSC service:
+
+```text
+haradiator.send_message
+```
+
+This is useful for testing OSC commands from **Developer Tools > Actions**.
+
+Blackout on:
+
+```yaml
+action: haradiator.send_message
 data:
   address: /radiator/master/blackout
-  value: 1
+  value: "1.0"
 ```
 
-Another example:
+Blackout off:
 
 ```yaml
-service: haradiator.send_message
+action: haradiator.send_message
 data:
-  address: /radiator/color/hue
-  value: 0.5
+  address: /radiator/master/blackout
+  value: "0.0"
 ```
 
-## Notes while waiting for the Radiator OSC update
+Switch to preset 2:
 
-This integration is intentionally prepared before the Radiator OSC release. Once the update lands, check:
+```yaml
+action: haradiator.send_message
+data:
+  address: /radiator/preset
+  value: "2.0"
+```
 
-1. Actual Radiator receive port.
-2. Actual feedback/dump behavior.
-3. Whether `/radiator/master/blackout` uses `1 = blackout` or `1 = output enabled`.
-4. Whether parameters are normalized floats or have device-specific scaling.
-5. Whether there is a command to request a full state dump.
+Change LFO 1 speed:
 
-## Development
+```yaml
+action: haradiator.send_message
+data:
+  address: /radiator/lfo1/speed
+  value: "1.0"
+```
 
-The OSC endpoint definitions are in:
+Radiator appears to report most numeric values as floats, including values that behave like on/off states. For that reason, values like `"1.0"` and `"0.0"` are recommended when testing manually.
+
+## Example preset playlist
+
+This example cycles through four presets with a delay between each one.
+
+```yaml
+alias: Radiator Preset Playlist
+mode: restart
+sequence:
+  - action: select.select_option
+    target:
+      entity_id: select.radiator_preset
+    data:
+      option: "Preset 1"
+
+  - delay:
+      seconds: 30
+
+  - action: select.select_option
+    target:
+      entity_id: select.radiator_preset
+    data:
+      option: "Preset 2"
+
+  - delay:
+      seconds: 30
+
+  - action: select.select_option
+    target:
+      entity_id: select.radiator_preset
+    data:
+      option: "Preset 3"
+
+  - delay:
+      seconds: 30
+
+  - action: select.select_option
+    target:
+      entity_id: select.radiator_preset
+    data:
+      option: "Preset 4"
+```
+
+## Troubleshooting OSC sending
+
+If Home Assistant sends commands but Radiator does not react, first check that Radiator OSC RX is enabled. HARadiator must send to the Radiator machine IP, and the send port must match Radiator’s OSC RX port. In the default setup this is port `8000`.
+
+Also check the firewall on the Radiator machine. It must allow incoming UDP traffic on the OSC RX port.
+
+A correct default command path looks like this:
 
 ```text
-custom_components/haradiator/const.py
+Home Assistant -> Radiator IP -> UDP 8000
 ```
 
-The UDP OSC bridge is in:
+If you are unsure whether Home Assistant is sending OSC at all, Protokol by Hexler is useful for testing. Run Protokol on a PC, temporarily point HARadiator at that PC’s IP, and check whether the OSC messages arrive.
+
+## Troubleshooting OSC feedback
+
+If commands work but sensors stay unknown, the problem is usually on the Radiator TX side.
+
+Radiator must have OSC TX enabled, and the OSC TX IP must be the Home Assistant IP. The Radiator TX port must match HARadiator’s listen port. In the default setup this is port `9000`.
+
+A correct default feedback path looks like this:
 
 ```text
-custom_components/haradiator/hub.py
+Radiator -> Home Assistant IP -> UDP 9000
 ```
 
-Entity platforms are split into:
+Make sure no other application or integration is already listening on the same UDP port. Only one process can listen on a UDP port at a time.
+
+After changing the TX settings, change a preset in Radiator to force a feedback update.
+
+## HACS download issues
+
+If HACS does not seem to install the newest version, make sure the latest commit is pushed to the `main` branch on GitHub. Then use **Redownload** in HACS and restart Home Assistant.
+
+If HACS keeps downloading the wrong version, remove the custom repository from HACS, restart Home Assistant, add the repository again, and reinstall the integration.
+
+The installed files can be checked in:
 
 ```text
-button.py
-number.py
-sensor.py
-switch.py
+/config/custom_components/haradiator/
 ```
 
+The installed manifest is here:
+
+```text
+/config/custom_components/haradiator/manifest.json
+```
+
+If Home Assistant blocks the integration because of an invalid version, check the version field in `manifest.json`. Valid examples are:
+
+```json
+"version": "0.3.0-beta.1"
+```
+
+```json
+"version": "0.3.1"
+```
+
+A version like this is not valid for Home Assistant:
+
+```json
+"version": "0.3RC1"
+```
+
+## Common OSC addresses
+
+| Purpose                 | OSC address                 | Example value         |
+| ----------------------- | --------------------------- | --------------------- |
+| Set preset              | `/radiator/preset`          | `"1.0"`               |
+| Current preset feedback | `/radiator/preset/current`  | `1.0`                 |
+| Blackout                | `/radiator/master/blackout` | `"1.0"` or `"0.0"`    |
+| Master level            | `/radiator/master/level`    | `1.0`                 |
+| Master size             | `/radiator/master/size`     | `0.5`                 |
+| LFO 1 speed             | `/radiator/lfo1/speed`      | `1.0`                 |
+| LFO 1 on/off            | `/radiator/lfo1/on`         | `1.0` or `0.0`        |
+| Color hue               | `/radiator/color/hue`       | `0.5`                 |
+| Color mode name         | `/radiator/color/mode/name` | `HSV`                 |
+| Ether Dream status      | `/radiator/ed/status`       | `Online` or `Offline` |
+
+## Development notes
+
+HARadiator uses `python-osc` for UDP OSC communication.
+
+The integration is local-only and uses Home Assistant’s `local_push` IoT class.
+
+Default ports:
+
+```text
+Radiator RX / HARadiator send:     8000
+Radiator TX / HARadiator listen:   9000
+```
+
+## Safety note
+
+Laser control can be safety-critical. This integration is experimental and should not be used as the only safety mechanism for laser output.
+
+Home Assistant blackout control is useful for automation, but it should not replace physical emergency stops, key switches, interlocks, scan-fail protection, or any other required laser safety systems.
+
+## License
+
+No license has been specified yet.
+
+If this project is shared publicly, consider adding a license file such as MIT, Apache-2.0, or GPL-3.0.
