@@ -13,7 +13,7 @@ CONF_PRESET_COUNT: Final = "preset_count"
 CONF_EXPOSE_ADVANCED: Final = "expose_advanced"
 
 DEFAULT_SEND_PORT: Final = 9000
-DEFAULT_LISTEN_HOST: Final = "0.0.0.0"
+DEFAULT_LISTEN_HOST: Final = "127.0.0.1"
 DEFAULT_LISTEN_PORT: Final = 9000
 DEFAULT_PRESET_COUNT: Final = 16
 DEFAULT_EXPOSE_ADVANCED: Final = False
@@ -41,6 +41,12 @@ class RadiatorOscDescription:
     native_max_value: float | None = None
     native_step: float | None = None
     entity_registry_enabled_default: bool = False
+
+    # Home Assistant platform entities expect these attributes to exist on
+    # entity_description. We do not use special device classes for Radiator yet.
+    device_class: str | None = None
+    entity_category: str | None = None
+    icon: str | None = None
 
 NUMBER_DESCRIPTIONS: Final[tuple[RadiatorOscDescription, ...]] = (
     RadiatorOscDescription(key='radiator_color_hue', name='Color Hue', address='/radiator/color/hue', value_type='float', direction='RX+TX', section='COLOR', native_min_value=0.0, native_max_value=1.0, native_step=0.01, entity_registry_enabled_default=True),

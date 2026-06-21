@@ -9,5 +9,5 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/mrfloppy88/HARadiator/issues",
   "requirements": ["python-osc==1.9.3"],
-  "version": "0.2.1-beta.1"
+  "version": "0.2.1-beta.2"
 }
