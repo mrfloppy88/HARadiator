@@ -42,10 +42,12 @@ class RadiatorOscHub:
         self._states: dict[str, Any] = {}
         self._callbacks: dict[str, set[StateCallback]] = {}
 
-        # Map every known OSC endpoint explicitly. This avoids relying on wildcard
-        # behavior and keeps the callback path predictable.
+        # Map every known OSC endpoint explicitly.
         for address in known_addresses:
             self._dispatcher.map(address, self._handle_osc_message)
+
+        # Also map a wildcard fallback so new Radiator OSC addresses still update.
+        self._dispatcher.set_default_handler(self._handle_osc_message)
 
     @property
     def states(self) -> dict[str, Any]:
@@ -82,7 +84,12 @@ class RadiatorOscHub:
     async def async_send(self, address: str, value: Any) -> None:
         """Send one OSC value to Radiator and update optimistic local state."""
         parsed = _parse_service_value(value)
-        await self._loop.run_in_executor(None, self._client.send_message, address, parsed)
+        await self._loop.run_in_executor(
+            None,
+            self._client.send_message,
+            address,
+            parsed,
+        )
         self._set_state(address, parsed)
 
     def subscribe(self, address: str, callback: StateCallback) -> Callable[[], None]:
@@ -120,8 +127,11 @@ class RadiatorOscHub:
         for callback in tuple(self._callbacks.get(address, ())):
             try:
                 callback(address, value)
-            except Exception:  # pragma: no cover - defensive callback isolation
-                _LOGGER.exception("Error notifying Radiator OSC callback for %s", address)
+            except Exception:
+                _LOGGER.exception(
+                    "Error notifying Radiator OSC callback for %s",
+                    address,
+                )
 
 
 def _parse_service_value(value: Any) -> Any:
@@ -129,14 +139,18 @@ def _parse_service_value(value: Any) -> Any:
     if isinstance(value, str):
         stripped = value.strip()
         lowered = stripped.lower()
+
         if lowered in {"true", "on", "yes"}:
             return True
+
         if lowered in {"false", "off", "no"}:
             return False
+
         try:
             if "." in stripped:
                 return float(stripped)
             return int(stripped)
         except ValueError:
             return value
+
     return value
