@@ -15,7 +15,7 @@ CONF_EXPOSE_ADVANCED: Final = "expose_advanced"
 DEFAULT_SEND_PORT: Final = 8000
 DEFAULT_LISTEN_HOST: Final = "0.0.0.0"
 DEFAULT_LISTEN_PORT: Final = 9000
-DEFAULT_PRESET_COUNT: Final = 100
+DEFAULT_PRESET_COUNT: Final = 1000
 DEFAULT_EXPOSE_ADVANCED: Final = False
 
 PLATFORMS: Final = ["select", "sensor", "switch"]

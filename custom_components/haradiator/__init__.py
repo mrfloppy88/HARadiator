@@ -51,6 +51,11 @@ SERVICE_SCHEMA = vol.Schema(
 RadiatorConfigEntry = ConfigEntry[RadiatorOscHub]
 
 
+def _entry_value(entry: ConfigEntry, key: str, default: Any) -> Any:
+    """Return an option value, falling back to original config entry data."""
+    return entry.options.get(key, entry.data.get(key, default))
+
+
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up the HARadiator integration service."""
 
@@ -97,10 +102,10 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: RadiatorConfigEntry) -> bool:
     """Set up HARadiator from a config entry."""
-    host = entry.data[CONF_HOST]
-    send_port = int(entry.data.get(CONF_SEND_PORT, DEFAULT_SEND_PORT))
-    listen_host = entry.data.get(CONF_LISTEN_HOST, DEFAULT_LISTEN_HOST)
-    listen_port = int(entry.data.get(CONF_LISTEN_PORT, DEFAULT_LISTEN_PORT))
+    host = str(_entry_value(entry, CONF_HOST, entry.data.get(CONF_HOST, "")))
+    send_port = int(_entry_value(entry, CONF_SEND_PORT, DEFAULT_SEND_PORT))
+    listen_host = str(_entry_value(entry, CONF_LISTEN_HOST, DEFAULT_LISTEN_HOST))
+    listen_port = int(_entry_value(entry, CONF_LISTEN_PORT, DEFAULT_LISTEN_PORT))
 
     hub = RadiatorOscHub(
         host=host,
@@ -115,6 +120,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: RadiatorConfigEntry) -> 
 
     entry.runtime_data = hub
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     _LOGGER.warning(
         "HARadiator setup complete: sending to %s:%s, listening on %s:%s",
@@ -147,14 +153,25 @@ async def async_unload_entry(hass: HomeAssistant, entry: RadiatorConfigEntry) ->
     return unload_ok
 
 
+async def _async_options_updated(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+) -> None:
+    """Reload HARadiator when options are changed."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 def should_expose_entity(entry: ConfigEntry, enabled_default: bool) -> bool:
     """Return whether an entity should be enabled by default."""
     return bool(
         enabled_default
-        or entry.data.get(CONF_EXPOSE_ADVANCED, DEFAULT_EXPOSE_ADVANCED)
+        or _entry_value(entry, CONF_EXPOSE_ADVANCED, DEFAULT_EXPOSE_ADVANCED)
     )
 
 
 def preset_count(entry: ConfigEntry) -> int:
-    """Return configured preset button count."""
-    return int(entry.data.get(CONF_PRESET_COUNT, DEFAULT_PRESET_COUNT))
+    """Return configured preset button count.
+
+    Radiator supports up to 1000 presets, so this is fixed by default.
+    """
+    return int(_entry_value(entry, CONF_PRESET_COUNT, DEFAULT_PRESET_COUNT))
