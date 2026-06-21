@@ -12,13 +12,13 @@ CONF_LISTEN_PORT: Final = "listen_port"
 CONF_PRESET_COUNT: Final = "preset_count"
 CONF_EXPOSE_ADVANCED: Final = "expose_advanced"
 
-DEFAULT_SEND_PORT: Final = 9000
-DEFAULT_LISTEN_HOST: Final = "127.0.0.1"
+DEFAULT_SEND_PORT: Final = 8000
+DEFAULT_LISTEN_HOST: Final = "0.0.0.0"
 DEFAULT_LISTEN_PORT: Final = 9000
-DEFAULT_PRESET_COUNT: Final = 16
+DEFAULT_PRESET_COUNT: Final = 100
 DEFAULT_EXPOSE_ADVANCED: Final = False
 
-PLATFORMS: Final = ["button", "number", "sensor", "switch"]
+PLATFORMS: Final = ["select", "sensor", "switch"]
 
 ATTR_ADDRESS: Final = "address"
 ATTR_VALUE: Final = "value"

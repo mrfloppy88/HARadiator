@@ -34,10 +34,11 @@ from .hub import RadiatorOscHub
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORM_MAP: dict[str, Platform] = {
+    "select": Platform.SELECT,
+    "switch": Platform.SWITCH,
+    "sensor": Platform.SENSOR,
     "button": Platform.BUTTON,
     "number": Platform.NUMBER,
-    "sensor": Platform.SENSOR,
-    "switch": Platform.SWITCH,
 }
 
 SERVICE_SCHEMA = vol.Schema(
@@ -51,14 +52,10 @@ RadiatorConfigEntry = ConfigEntry[RadiatorOscHub]
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
-    """Set up the HARadiator integration service.
-
-    The send_message service is registered once globally and always looks up
-    the currently loaded hub. This prevents stale service handlers after the
-    config entry is deleted and re-added.
-    """
+    """Set up the HARadiator integration service."""
 
     async def _handle_send_message(call: ServiceCall) -> None:
+        """Handle manual OSC send service."""
         hubs: dict[str, RadiatorOscHub] = hass.data.get(DOMAIN, {})
 
         if not hubs:
