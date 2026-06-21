@@ -339,6 +339,6 @@ Home Assistant blackout control is useful for automation, but it should not repl
 
 ## License
 
-No license has been specified yet.
+This project is released under the MIT License.
 
-If this project is shared publicly, consider adding a license file such as MIT, Apache-2.0, or GPL-3.0.
+Do whatever you want with it, just keep the license text included. The software is provided as-is, without warranty.
