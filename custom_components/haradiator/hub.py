@@ -135,21 +135,29 @@ class RadiatorOscHub:
 
 
 def _parse_service_value(value: Any) -> Any:
-    """Convert UI service strings to OSC-friendly primitive values."""
+    """Convert UI service values to OSC-friendly primitive values.
+
+    Radiator reports most numeric values as FLOAT, including on/off style
+    values like blackout, so numeric service values are sent as floats.
+    """
+    if isinstance(value, bool):
+        return 1.0 if value else 0.0
+
+    if isinstance(value, int | float):
+        return float(value)
+
     if isinstance(value, str):
         stripped = value.strip()
         lowered = stripped.lower()
 
         if lowered in {"true", "on", "yes"}:
-            return True
+            return 1.0
 
         if lowered in {"false", "off", "no"}:
-            return False
+            return 0.0
 
         try:
-            if "." in stripped:
-                return float(stripped)
-            return int(stripped)
+            return float(stripped)
         except ValueError:
             return value
 

@@ -47,8 +47,55 @@ SERVICE_SCHEMA = vol.Schema(
     }
 )
 
-
 RadiatorConfigEntry = ConfigEntry[RadiatorOscHub]
+
+
+async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
+    """Set up the HARadiator integration service.
+
+    The send_message service is registered once globally and always looks up
+    the currently loaded hub. This prevents stale service handlers after the
+    config entry is deleted and re-added.
+    """
+
+    async def _handle_send_message(call: ServiceCall) -> None:
+        hubs: dict[str, RadiatorOscHub] = hass.data.get(DOMAIN, {})
+
+        if not hubs:
+            _LOGGER.error(
+                "Cannot send HARadiator OSC message because no HARadiator hub is loaded"
+            )
+            return
+
+        if len(hubs) > 1:
+            _LOGGER.warning(
+                "Multiple HARadiator hubs are loaded; send_message will use the first one"
+            )
+
+        hub = next(iter(hubs.values()))
+
+        address = call.data[ATTR_ADDRESS]
+        value = call.data[ATTR_VALUE]
+
+        _LOGGER.warning(
+            "HARadiator sending OSC message to %s:%s address=%s value=%r",
+            hub.host,
+            hub.send_port,
+            address,
+            value,
+        )
+
+        await hub.async_send(address, value)
+
+    if not hass.services.has_service(DOMAIN, SERVICE_SEND_MESSAGE):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_SEND_MESSAGE,
+            _handle_send_message,
+            schema=SERVICE_SCHEMA,
+        )
+
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: RadiatorConfigEntry) -> bool:
@@ -66,37 +113,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: RadiatorConfigEntry) -> 
         known_addresses=ALL_KNOWN_ADDRESSES,
         loop=hass.loop,
     )
+
     await hub.async_start()
 
     entry.runtime_data = hub
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = hub
 
-    async def _handle_send_message(call: ServiceCall) -> None:
-        await hub.async_send(call.data[ATTR_ADDRESS], call.data[ATTR_VALUE])
-
-    if not hass.services.has_service(DOMAIN, SERVICE_SEND_MESSAGE):
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_SEND_MESSAGE,
-            _handle_send_message,
-            schema=SERVICE_SCHEMA,
-        )
+    _LOGGER.warning(
+        "HARadiator setup complete: sending to %s:%s, listening on %s:%s",
+        host,
+        send_port,
+        listen_host,
+        listen_port,
+    )
 
     await hass.config_entries.async_forward_entry_setups(
-        entry, [PLATFORM_MAP[platform] for platform in PLATFORMS]
+        entry,
+        [PLATFORM_MAP[platform] for platform in PLATFORMS],
     )
+
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: RadiatorConfigEntry) -> bool:
     """Unload a HARadiator config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(
-        entry, [PLATFORM_MAP[platform] for platform in PLATFORMS]
+        entry,
+        [PLATFORM_MAP[platform] for platform in PLATFORMS],
     )
+
     if unload_ok:
         hub = entry.runtime_data
         await hub.async_stop()
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+
     return unload_ok
 
 
